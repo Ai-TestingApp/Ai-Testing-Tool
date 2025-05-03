@@ -284,34 +284,43 @@ def save_screenshots_to_excel(excel_path, df_main, wb, task_id, tester_name, tes
         #upload_to_github(excel_path, "Ai-TestingApp", "Ai-Testing-Tool", st.secrets["GITHUB_TOKEN"], excel_path)
 def upload_to_github(excel_path, repo_owner, repo_name, token, repo_file_path):
     """Uploads the updated Excel file back to GitHub."""
-    api_url = f"https://api.github.com/repos/{repo_owner}/{repo_name}/contents/{repo_file_path}"
+    import base64
+    import requests
 
-    # Step 1: Get current file SHA
-    headers = {"Authorization": f"token {token}"}
+    api_url = f"https://api.github.com/repos/{repo_owner}/{repo_name}/contents/{repo_file_path}"
+    headers = {
+        "Authorization": f"token {token}",
+        "Accept": "application/vnd.github.v3+json"
+    }
+
+    # Step 1: Get the current file SHA
     response = requests.get(api_url, headers=headers)
-    if response.status_code != 200:
-        st.error("Could not retrieve file SHA from GitHub.")
+    if response.status_code == 200:
+        sha = response.json().get("sha")
+        st.info("✅ Retrieved file SHA from GitHub.")
+    else:
+        st.error(f"❌ Failed to get file SHA from GitHub: {response.status_code}, {response.text}")
         return
 
-    sha = response.json().get("sha")
-
-    # Step 2: Read the updated Excel file
-    with open(excel_path, "rb") as f:
-        content = f.read()
+    # Step 2: Read the updated Excel file and encode in base64
+    try:
+        with open(excel_path, "rb") as f:
+            content = f.read()
         encoded_content = base64.b64encode(content).decode()
+    except Exception as e:
+        st.error(f"❌ Failed to read and encode file: {e}")
+        return
 
-    # Step 3: Commit and push updated file
-    commit_message = "Update Excel with latest testing data"
+    # Step 3: PUT request to update file
     data = {
-        "message": commit_message,
+        "message": "Update Excel with latest testing data",
         "content": encoded_content,
         "sha": sha,
-        "branch": "main"  # Change if you're using another branch
+        "branch": "main"  # Or your branch name
     }
 
     put_response = requests.put(api_url, headers=headers, json=data)
-
     if put_response.status_code in [200, 201]:
-        st.success("Excel file successfully updated on GitHub.")
+        st.success("✅ Excel file successfully updated on GitHub.")
     else:
-        st.error(f"GitHub upload failed: {put_response.status_code} — {put_response.text}")
+        st.error(f"❌ GitHub PUT failed: {put_response.status_code}\n{put_response.text}")
