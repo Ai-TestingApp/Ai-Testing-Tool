@@ -1,4 +1,5 @@
 import streamlit as st
+st.set_page_config(page_title="Testing Tool", layout="wide")
 import pandas as pd
 from utils import load_excel_data, save_screenshots_to_excel
 from PIL import Image
