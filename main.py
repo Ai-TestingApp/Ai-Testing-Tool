@@ -125,7 +125,7 @@ if page == "Testing App":
                     for i, img_file in enumerate(screenshots):
                         img = Image.open(img_file)
                         with cols[i % 3]:
-                            st.image(img, caption=img_file.name, use_column_width=True)
+                            st.image(img, caption=img_file.name, use_container_width=True)
 
                 if st.button("✅ Submit Task"):
                     if not screenshots:
