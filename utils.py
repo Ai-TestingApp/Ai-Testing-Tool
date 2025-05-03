@@ -9,7 +9,9 @@ from PIL import Image
 from datetime import datetime
 import io
 import pandas as pd
-import streamlit as st 
+import streamlit as st
+import requests
+import base64
 
 
 def load_excel_data(path):
@@ -26,6 +28,7 @@ def load_excel_data(path):
 def get_task_ids(df):
     return df["Task ID"].dropna().astype(str).tolist()
 
+
 def insert_image(ws, img_bytes, row):
     img = Image.open(img_bytes)
     img.thumbnail((600, 400))
@@ -38,6 +41,33 @@ def insert_image(ws, img_bytes, row):
     ws.column_dimensions['A'].width = 60
     ws.row_dimensions[row].height = 100
     return row + 15
+
+
+def upload_to_github(file_path, repo_owner, repo_name, token, file_name):
+    """Upload the updated Excel file to GitHub."""
+    url = f"https://api.github.com/repos/{repo_owner}/{repo_name}/contents/{file_name}"
+
+    with open(file_path, "rb") as file:
+        content = base64.b64encode(file.read()).decode("utf-8")
+
+    headers = {
+        "Authorization": f"token {token}",
+        "Content-Type": "application/json",
+    }
+
+    # Create commit data
+    data = {
+        "message": "Update test results",
+        "content": content,
+        "branch": "main"  # Use your default branch
+    }
+
+    response = requests.put(url, headers=headers, json=data)
+    if response.status_code == 201:
+        print(f"Successfully uploaded {file_name} to GitHub")
+    else:
+        print(f"Failed to upload to GitHub: {response.status_code} - {response.text}")
+
 
 def save_screenshots_to_excel(excel_path, df_main, wb, task_id, tester_name, test_result, comment, screenshots):
     if isinstance(excel_path, (str, os.PathLike)):
@@ -235,8 +265,9 @@ def save_screenshots_to_excel(excel_path, df_main, wb, task_id, tester_name, tes
 
 
         update_summary_sheet()
+
+        # Save locally
         wb.save(excel_path)
-    else:
-        # New in-memory save
-        wb.save(excel_path)
-        excel_path.seek(0)
+
+        # Upload to GitHub
+        upload_to_github(excel_path, "Ai-TestingApp", "Ai-Testing-Tool", st.secrets["GITHUB_TOKEN"], excel_path)
