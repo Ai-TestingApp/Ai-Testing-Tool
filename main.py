@@ -17,7 +17,6 @@ except ImportError:
     st.warning("PyGithub not installed - GitHub updates disabled", icon="⚠️")
 
 # Page setup with custom theme
-st.set_page_config(page_title="Testing Tool", layout="wide")
 st.markdown("""
     <style>
     .main { background-color: #f5f7fa; }
