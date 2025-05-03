@@ -270,4 +270,4 @@ def save_screenshots_to_excel(excel_path, df_main, wb, task_id, tester_name, tes
         wb.save(excel_path)
 
         # Upload to GitHub
-        upload_to_github(excel_path, "Ai-TestingApp", "Ai-Testing-Tool", st.secrets["GITHUB_TOKEN"], excel_path)
+        upload_to_github(excel_path, "Ai-TestingApp", "Ai-Testing-Tool", st.secrets["GITHUB_TOKEN"], "main/main_excel.xlsx")
