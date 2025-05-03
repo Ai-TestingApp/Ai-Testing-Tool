@@ -4,3 +4,4 @@ openpyxl
 Pillow
 matplotlib
 seaborn
+PyGithub>=2.0
