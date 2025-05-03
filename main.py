@@ -1,5 +1,4 @@
 import streamlit as st
-st.set_page_config(page_title="Testing Tool", layout="wide")
 import pandas as pd
 from utils import load_excel_data, save_screenshots_to_excel
 from PIL import Image
@@ -18,7 +17,7 @@ except ImportError:
     st.warning("PyGithub not installed - GitHub updates disabled", icon="⚠️")
 
 # Page setup with custom theme (MUST BE FIRST STREAMLIT COMMAND)
-
+st.set_page_config(page_title="Testing Tool", layout="wide")
 st.markdown("""
     <style>
     .main { background-color: #f5f7fa; }
@@ -152,47 +151,51 @@ if page == "Testing App":
                             st.image(Image.open(img_file), caption=img_file.name, use_column_width=True)
 
                 if st.button("✅ Submit Task"):
-                    if not screenshots:
-                        st.error("❗ Please upload at least one screenshot.")
-                    else:
-                        output = io.BytesIO()
-                        save_screenshots_to_excel(
-                            excel_path=output,
-                            df_main=df_main,
-                            wb=wb,
-                            task_id=task_id,
-                            tester_name=tester_name,
-                            test_result=test_result,
-                            comment=comment,
-                            screenshots=screenshots
-                        )
-                        excel_bytes = output.getvalue()
-                        
-                        st.download_button(
-                            label="📥 Download Updated Excel",
-                            data=excel_bytes,
-                            file_name="updated_results.xlsx",
-                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                        )
-                        
-                        if GITHUB_ENABLED and 'github_token' in st.secrets:
-                            try:
-                                g = Github(st.secrets.github_token)
-                                repo = g.get_repo(GITHUB_REPO)
-                                contents = repo.get_contents(GITHUB_FILE)
-                                repo.update_file(
-                                    path=GITHUB_FILE,
-                                    message=f"Update by {tester_name}",
-                                    content=excel_bytes,
-                                    sha=contents.sha
-                                )
-                                st.success("✅ Updated GitHub successfully!")
-                            except Exception as e:
-                                st.warning(f"⚠️ GitHub update failed: {str(e)}")
-                        
-                        st.balloons()
-                        time.sleep(2)
-                        st.rerun()
+                    output = io.BytesIO()
+                    
+                    # Ensure screenshots is always a list (even if empty)
+                    screenshots = screenshots if screenshots else []
+                    
+                    # Always save result (even with no screenshots)
+                    save_screenshots_to_excel(
+                        excel_path=output,
+                        df_main=df_main,
+                        wb=wb,
+                        task_id=task_id,
+                        tester_name=tester_name,
+                        test_result=test_result,
+                        comment=comment,
+                        screenshots=screenshots
+                    )
+
+                    excel_bytes = output.getvalue()
+
+                    st.download_button(
+                        label="📥 Download Updated Excel",
+                        data=excel_bytes,
+                        file_name="updated_results.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    )
+
+                    if GITHUB_ENABLED and 'github_token' in st.secrets:
+                        try:
+                            g = Github(st.secrets.github_token)
+                            repo = g.get_repo(GITHUB_REPO)
+                            contents = repo.get_contents(GITHUB_FILE)
+                            repo.update_file(
+                                path=GITHUB_FILE,
+                                message=f"Update by {tester_name}",
+                                content=excel_bytes,
+                                sha=contents.sha
+                            )
+                            st.success("✅ Updated GitHub successfully!")
+                        except Exception as e:
+                            st.warning(f"⚠️ GitHub update failed: {str(e)}")
+
+                    st.balloons()
+                    time.sleep(2)
+                    st.rerun()
+
         else:
             st.error(f"❌ No data found for Task ID {task_id} (searched as {search_id})")
     else:
