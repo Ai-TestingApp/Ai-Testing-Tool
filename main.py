@@ -8,7 +8,15 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import time
 
-# Page setup with custom theme
+# Replace the GitHub import with this try-except block
+try:
+    from github import Github  # For GitHub integration
+    GITHUB_ENABLED = True
+except ImportError:
+    GITHUB_ENABLED = False
+    st.warning("PyGithub not installed - GitHub updates disabled", icon="⚠️")
+
+# Page setup with custom theme (MUST BE FIRST STREAMLIT COMMAND)
 st.set_page_config(page_title="Testing Tool", layout="wide")
 st.markdown("""
     <style>
@@ -22,17 +30,39 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+# NEW: GitHub configuration
+GITHUB_REPO = "Ai-TestingApp/Ai-Testing-Tool"
+GITHUB_FILE = "main_excel.xlsx"
+
+# Load Excel data
 MAIN_EXCEL_PATH = "main_excel.xlsx"
 df_main, wb = load_excel_data(MAIN_EXCEL_PATH)
+
+# Clean and normalize Task IDs
+df_main["Task ID"] = df_main["Task ID"].astype(str).str.strip()
 
 # Sidebar navigation
 st.sidebar.title("🛍️ Navigation")
 page = st.sidebar.radio("Go to", ["Testing App", "Excel Sheet", "Analytics"])
 
-# Helper to normalize task IDs like 1.0 vs 1
-normalize_id = lambda tid: str(int(float(tid))) if float(tid).is_integer() else str(tid)
+# Improved ID normalization function
+def normalize_id(task_id):
+    """Convert all task IDs to consistent string format"""
+    try:
+        # Handle string inputs
+        if isinstance(task_id, str):
+            if '.' in task_id:
+                return task_id  # Keep decimal IDs as-is (2.0, 2.1 etc.)
+            return str(int(float(task_id)))  # Convert "2" to "2"
+        
+        # Handle numeric inputs
+        if float(task_id).is_integer():
+            return str(int(task_id))  # Convert 2.0 to "2"
+        return str(task_id)  # Keep 2.1 as "2.1"
+    except:
+        return str(task_id)  # Fallback for any format
 
-# Graph plotting function
+# Graph plotting function (unchanged)
 def plot_test_result_summary(df):
     result_counts = df['Test Result'].dropna().value_counts()
     result_counts = result_counts.reindex(['Pass', 'Fail', 'Hold']).fillna(0)
@@ -44,10 +74,9 @@ def plot_test_result_summary(df):
     fig, ax = plt.subplots()
     colors = ['#28a745', '#dc3545', '#ffc107']
     ax.pie(result_counts, labels=result_counts.index, autopct='%1.1f%%', startangle=90, colors=colors)
-    ax.axis('equal')  # Equal aspect ratio ensures that pie is drawn as a circle.
+    ax.axis('equal')
     st.markdown("### 📊 Test Result Summary")
     st.pyplot(fig)
-
 
 if page == "Testing App":
     st.title("🔪 Testing Documentation Tool")
@@ -56,104 +85,128 @@ if page == "Testing App":
     tester_names = sorted(df_main["Tester Name"].dropna().unique())
     tester_name = st.selectbox("👤 Select Tester Name", tester_names)
 
-    # Filter tasks for selected tester
+    # Filter and prepare tasks
     tester_tasks = df_main[df_main["Tester Name"] == tester_name].copy()
-    tester_tasks["Task ID"] = tester_tasks["Task ID"].astype(str)
-    tester_tasks.sort_values("Task ID", key=lambda col: col.map(lambda x: [int(i) if i.isdigit() else i for i in x.split('.')]), inplace=True)
+    tester_tasks["Normalized_ID"] = tester_tasks["Task ID"].apply(normalize_id)
+    
+    # Debug output (can remove later)
+    st.sidebar.write("Debug - Task IDs:", tester_tasks["Task ID"].unique())
+    st.sidebar.write("Normalized IDs:", tester_tasks["Normalized_ID"].unique())
 
-    # Determine completed task IDs
-    completed_ids = df_main[df_main["Test Result"].notna()]["Task ID"].astype(str).apply(normalize_id).tolist()
+    # Determine completed tasks
+    completed_ids = df_main[df_main["Test Result"].notna()]["Task ID"].apply(normalize_id).tolist()
 
-    # Determine which task IDs to show and enable
+    # Prepare task availability
     available_task_ids = []
     disabled_task_ids = []
-    sorted_task_ids = tester_tasks["Task ID"].tolist()
+    sorted_task_ids = tester_tasks.sort_values("Task ID")["Task ID"].unique()
 
     for i, tid in enumerate(sorted_task_ids):
         norm_tid = normalize_id(tid)
         if norm_tid in completed_ids:
             disabled_task_ids.append(tid)
-        elif i == 0 or normalize_id(sorted_task_ids[i - 1]) in completed_ids:
+        elif i == 0 or normalize_id(sorted_task_ids[i-1]) in completed_ids:
             available_task_ids.append(tid)
-        else:
-            break
 
-    task_display_options = []
-    for tid in sorted_task_ids:
-        label = tid
-        if tid in disabled_task_ids:
-            label += " ✅ (Completed)"
-        elif tid not in available_task_ids:
-            label += " 🔒 (Locked)"
-        task_display_options.append(label)
+    # Display task options
+    task_display_options = [
+        f"{tid} ✅ (Completed)" if tid in disabled_task_ids else
+        f"{tid} 🔒 (Locked)" if tid not in available_task_ids else
+        tid
+        for tid in sorted_task_ids
+    ]
 
     if available_task_ids:
-        task_id = st.selectbox("🆔 Select Task ID", options=available_task_ids)
-
-        # Auto-fill metadata (check if selected task ID exists)
-        selected_row = tester_tasks[tester_tasks["Task ID"] == task_id]
+        task_id = st.selectbox("🆔 Select Task ID", 
+                             options=available_task_ids,
+                             format_func=lambda x: task_display_options[sorted_task_ids.tolist().index(x)])
+        
+        # Find matching task
+        search_id = normalize_id(task_id)
+        selected_row = tester_tasks[tester_tasks["Normalized_ID"] == search_id]
 
         if not selected_row.empty:
             selected_row = selected_row.iloc[0]
-            task_heading = selected_row.get("Task Name", "")
-            navigation = selected_row.get("Navigation", "")
-            parameters = selected_row.get("Parameters", "")
-
             with st.expander("📋 Task Details", expanded=True):
-                st.text_input("📝 Task Heading", task_heading, disabled=True)
-                st.text_input("🛍️ Navigation", navigation, disabled=True)
-                st.text_input("⚙️ Parameters", parameters, disabled=True)
+                st.text_input("📝 Task Heading", selected_row.get("Task Name", ""), disabled=True)
+                st.text_input("🛍️ Navigation", selected_row.get("Navigation", ""), disabled=True)
+                st.text_input("⚙️ Parameters", selected_row.get("Parameters", ""), disabled=True)
 
-            # User Inputs
+            # Test submission
             with st.expander("📝 Submit Test Result", expanded=True):
                 test_result = st.selectbox("✅ Test Result", ["Pass", "Fail", "Hold"])
-                
-                # Add unique key for the comment box to reset on page rerun
                 comment = st.text_area("💬 Comment", key=f"comment_{task_id}")
                 
-                # Add a unique key to reset the file uploader widget on page rerun
                 screenshots = st.file_uploader(
                     "📌 Upload Screenshot(s)", 
                     type=["png", "jpg", "jpeg"], 
                     accept_multiple_files=True,
-                    key=f"screenshots_{task_id}"  # Use task_id to reset uploader
+                    key=f"screenshots_{task_id}"
                 )
 
                 if screenshots:
-                    st.markdown("**📸 Preview Screenshots:**")
                     cols = st.columns(min(3, len(screenshots)))
                     for i, img_file in enumerate(screenshots):
-                        img = Image.open(img_file)
                         with cols[i % 3]:
-                            st.image(img, caption=img_file.name, use_column_width=True)
+                            st.image(Image.open(img_file), caption=img_file.name, use_column_width=True)
 
                 if st.button("✅ Submit Task"):
-                    if not screenshots:
-                        st.error("❗ Please upload at least one screenshot.")
-                    else:
-                        save_screenshots_to_excel(
-                            excel_path=MAIN_EXCEL_PATH,
-                            df_main=df_main,
-                            wb=wb,
-                            task_id=task_id,
-                            tester_name=tester_name,
-                            test_result=test_result,
-                            comment=comment,
-                            screenshots=screenshots
-                        )
-                        st.success(f"🎉 Task {task_id} saved successfully with screenshots!")
-                        
-                        # Mark task as submitted and trigger rerun
-                        st.session_state.task_submitted = True
-                        time.sleep(3)  # Optional: add delay to show the success message
-                        
-                        # Refresh the page after submission
-                        st.rerun()  # This triggers a page rerun
+                    output = io.BytesIO()
+                    screenshots = screenshots if screenshots else []
+
+                    # Save results to in-memory Excel file
+                    save_screenshots_to_excel(
+                        excel_path=output,
+                        df_main=df_main,
+                        wb=wb,
+                        task_id=task_id,
+                        tester_name=tester_name,
+                        test_result=test_result,
+                        comment=comment,
+                        screenshots=screenshots
+                    )
+
+                    # Get raw bytes of the Excel file
+                    excel_bytes = output.getvalue()
+
+                    # Push to GitHub (before UI feedback)
+                    if GITHUB_ENABLED and 'GITHUB_TOKEN' in st.secrets:
+                        try:
+                            st.write("🔄 Pushing to GitHub...")
+                            g = Github(st.secrets.GITHUB_TOKEN)
+                            repo = g.get_repo(GITHUB_REPO)
+                            contents = repo.get_contents(GITHUB_FILE)
+                            repo.update_file(
+                                path=GITHUB_FILE,
+                                message=f"Update by {tester_name} on Task {task_id}",
+                                content=excel_bytes,
+                                sha=contents.sha
+                            )
+                            st.success("✅ Updated GitHub successfully!")
+                        except Exception as e:
+                            st.warning(f"⚠️ GitHub update failed: {str(e)}")
+
+                    # Offer file for download
+                    st.download_button(
+                        label="📥 Download Updated Excel",
+                        data=excel_bytes,
+                        file_name="updated_results.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    )
+
+                    st.balloons()
+                    time.sleep(1.5)
+                    # Optional: rerun the app to refresh task list
+                    # st.rerun()
+
 
         else:
-            st.error(f"❌ No data found for Task ID {task_id}.")
+            st.error(f"❌ No data found for Task ID {task_id} (searched as {search_id})")
     else:
-        st.markdown("<span style='color: green; font-weight: bold;'>🎉 You have completed all your assigned tasks. No tasks are left.</span>", unsafe_allow_html=True)
+        st.success("🎉 All tasks completed!")
+
+# [Rest of your code for Excel Sheet and Analytics pages remains exactly the same...])
+        
 
 elif page == "Excel Sheet":
     st.title("📄 Excel Sheet Viewer")
@@ -277,3 +330,7 @@ elif page == "Analytics":
     # Render progress bar
     st.progress(completion_percent)
 
+
+
+
+       
