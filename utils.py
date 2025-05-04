@@ -253,7 +253,7 @@ def save_screenshots_to_excel(excel_path, df_main, wb, task_id, tester_name, tes
         local_file_path="main_excel.xlsx",
         github_username="Ai-TestingApp",
         repo_name="Ai-Testing-Tool",
-        github_token=st.secrets["GITHUB_TOKEN"],
+        github_token = st.secrets["GITHUB"]["GITHUB_TOKEN"],
         repo_file_path="main_excel.xlsx"
     )
 
