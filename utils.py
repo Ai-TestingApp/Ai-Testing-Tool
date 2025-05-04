@@ -42,34 +42,6 @@ def insert_image(ws, img_bytes, row):
     return row + 15
 
 
-def upload_to_github(local_file_path, github_username, repo_name, github_token, repo_file_path, branch="main"):
-    url = f"https://api.github.com/repos/{github_username}/{repo_name}/contents/{repo_file_path}"
-    headers = {
-        "Authorization": f"Bearer {github_token}",
-        "Accept": "application/vnd.github.v3+json"
-    }
-
-    response = requests.get(url, headers=headers)
-    if response.status_code != 200:
-        raise Exception(f"❌ Failed to get file SHA from GitHub: {response.status_code}, {response.text}")
-
-    sha = response.json()["sha"]
-
-    with open(local_file_path, "rb") as f:
-        content = base64.b64encode(f.read()).decode()
-
-    data = {
-        "message": "Automated update from Streamlit app",
-        "content": content,
-        "sha": sha,
-        "branch": branch
-    }
-
-    put_response = requests.put(url, headers=headers, json=data)
-    if put_response.status_code != 200:
-        raise Exception(f"⚠️ GitHub update failed: {put_response.status_code} {put_response.text}")
-
-    return put_response.json()
 
 
 def save_screenshots_to_excel(excel_path, df_main, wb, task_id, tester_name, test_result, comment, screenshots):
